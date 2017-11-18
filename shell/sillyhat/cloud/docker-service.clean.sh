@@ -1,0 +1,1 @@
+docker service rm eureka customer web-app

@@ -10,7 +10,7 @@ then
      --with-registry-auth \
      --env SPRING_PROFILES_ACTIVE=$1 \
      -p 8080:8080 \
-     111909622691.dkr.ecr.ap-southeast-1.amazonaws.com/zuul:$2
+     xushikuan/sillyhat.cloud.zuul:$2
 fi
 
 if [ $DOCKERFILENAME == "all" ] || [ $DOCKERFILENAME == "eureka" ]

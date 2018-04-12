@@ -1,0 +1,233 @@
+node {
+    try {
+        stage('Pre build'){
+            println "TAG : ${env.TAG}"
+            println "ENVIRONMENT : ${env.ENVIRONMENT}"
+            println "TAOPERATIONG : ${env.OPERATION}"
+            println "MODULE_NAME : ${env.MODULE_NAME}"
+            println "--------Pre build. begin--------"
+            println "Pre build"
+            env.BUILD_ENV='dt'
+            notifySlack("#000000","编译中,请稍后...","${env.TAG}" == "" ? "master" : "${env.TAG}")
+            println "--------Pre build. end--------"
+        }
+
+        stage('Clone repository') {
+            println "--------Clone repository. begin--------"
+            println "--------Clone repository. end--------"
+        }
+
+        stage('Build'){
+            println "--------Build. begin--------"
+            println "--------Build. end--------"
+        }
+
+        stage('Test'){
+            println "--------Test. begin--------"
+            println "--------Test. end--------"
+        }
+
+        stage('Build Docker Image') {
+            println "--------Build Docker Image. begin--------"
+            println "--------Build Docker Image. end--------"
+        }
+
+        stage('Push Image') {
+            println "--------Push Image. begin--------"
+            println "--------Push Image. end--------"
+        }
+
+        stage("Deploy"){
+            println "--------Deploy. begin--------"
+            notifySlack("#FFFF00","我要重启了，请等会再用哦.","${env.TAG}" == "" ? "master" : "${env.TAG}")
+            println "--------Deploy. end--------"
+        }
+    } catch (Exception e) {
+        notifySlack("#FF0000","Build error.","${env.TAG}" == "" ? "master" : "${env.TAG}")
+        println(e)
+        throw e
+    }
+}
+
+
+import groovy.json.JsonOutput
+
+def notifySlack(color,text,tag) {
+    def slackURL = 'https://hooks.slack.com/services/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';
+    def payload = JsonOutput.toJson([
+            color : color,
+            pretext : text,
+            fields : [
+                    [
+                            title : "Project Environment",
+                            value : "${env.ENVIRONMENT} [${env.MODULE_NAME}]",
+                            short : true
+                    ],[
+                            title : "Version",
+                            value : tag,
+                            short : true
+                    ]
+            ]
+    ])
+    sh "curl -X POST --data-urlencode \'payload=${payload}\' ${slackURL}"
+}
+
+def executeBuild() {
+    if("${env.OPERATION}" == "remove"){
+        return false
+    }else{
+        return true
+    }
+}
+
+def startServerList() {
+    def serverModuleList = initServerModuleList()
+    for (int i = 0; i < serverModuleList.size(); i++) {
+        def serverModule = serverModuleList.get(i)
+        startServer("${serverModule.serverName}","${serverModule.port}","${serverModule.debugPort}","${serverModule.openPortMapping}","${serverModule.hasDebug}")
+    }
+}
+def startServer(serverName,port,debugPort,openPortMapping,hasDebug) {
+    if (serverName == "${env.MODULE_NAME}" || "ALL" == "${env.MODULE_NAME}"){
+        def tagName = getTagName()
+        println "build "+serverName+" module"
+        if("${env.OPERATION}" == "update"){
+            sh "docker service update --with-registry-auth --image 111909622691.dkr.ecr.ap-southeast-1.amazonaws.com/"+serverName+":${tagName} "+serverName
+        }else if("${env.OPERATION}" == "remove_and_create"){
+            removeService(serverName)
+            createService(getEnvironment(),serverName,port,debugPort,openPortMapping,hasDebug,tagName)
+        }else if("${env.OPERATION}" == "remove"){
+            removeService(serverName)
+        }else if("${env.OPERATION}" == "create"){
+            createService(getEnvironment(),serverName,port,debugPort,openPortMapping,hasDebug,tagName)
+        }
+    }
+}
+
+def getEnvironment() {
+    if("${env.ENVIRONMENT}" == "DEVELOP"){
+        println "network dev"
+        return "dev"
+    }else if("${env.ENVIRONMENT}" == "DT"){
+        println "network dt"
+        return "dt"
+    }else if("${env.ENVIRONMENT}" == "DP"){
+        println "network dp"
+        return "dp"
+    }else if("${env.ENVIRONMENT}" == "PRODUCTION"){
+        println "network production"
+        return "production"
+    }else{
+        println "network is null"
+        return ""
+    }
+}
+
+def removeService(serverName) {
+    try {
+        sh "docker service rm "+serverName
+    }catch (Exception e){
+        println "Doesn't have docker service " + serverName
+    }
+}
+
+def createService(environment,serverName,port,debugPort,openPortMapping,hasDebug,tagName) {
+    try {
+        if("${hasDebug}" == "true" && "${env.DEBUG}" == "true"){
+            sh "docker run -d -p ${port}:${port} -p ${debugPort}:${debugPort} 111909622691.dkr.ecr.ap-southeast-1.amazonaws.com/${serverName}:${tagName}"
+        }else{
+            sh "docker service create --name ${serverName} --replicas 1 --network ${environment} --with-registry-auth --env SPRING_PROFILES_ACTIVE=${environment} "+(openPortMapping == "true" ?"-p "+port+":"+port : "")+" 111909622691.dkr.ecr.ap-southeast-1.amazonaws.com/${serverName}:${tagName}"
+        }
+    }catch (Exception e){
+        notifySlack("#FF0000","docker service create [${serverName}] error.","${env.TAG}" == "" ? "master" : "${env.TAG}")
+        println(e)
+        throw e
+    }
+}
+
+
+def getTagName() {
+    if("${env.TAG}" == ""){
+        return "master"
+    }else{
+        return "${env.TAG}"
+    }
+}
+
+def writeDockerCompose() {
+    def tagName = getTagName()
+    sh "touch docker-compose.yml"
+    sh "echo 'version: \"3\"\nservices:' > docker-compose.yml"
+    println "init serverModuleList"
+    def serverModuleList = initServerModuleList()
+    for (int i = 0; i < serverModuleList.size(); i++) {
+        def serverModule = serverModuleList.get(i)
+        if ("${serverModule.serverName}" == "${env.MODULE_NAME}" || "ALL" == "${env.MODULE_NAME}") {
+            println "module : "+serverModule.serverName+" ;port : "+serverModule.port+" ;has debug : " + serverModule.hasDebug
+            sh "cat docker-compose-template.yml >> docker-compose.yml"
+            sh "sed -i 's/{MODULE_NAME}/${serverModule.serverName}/' docker-compose.yml"
+            sh "sed -i 's/{TAG}/${tagName}/' docker-compose.yml"
+            if("${serverModule.hasDebug}" == "true" && "${env.DEBUG}" == "true"){
+                sh "sed -i 's/{DOCKERFILE_NAME}/Dockerfile-debug/' docker-compose.yml"
+            }else{
+                sh "sed -i 's/{DOCKERFILE_NAME}/Dockerfile/' docker-compose.yml"
+            }
+            if("${serverModule.port}" == ""){
+                sh "sed -i 's/{PORTS}//' docker-compose.yml"
+            }else{
+                sh "sed -i 's/{PORTS}/\\\n    ports:\\\n      - ${serverModule.port}:${serverModule.port}/' docker-compose.yml"
+            }
+        }
+    }
+    sh "cat docker-compose.yml"
+}
+
+def initServerModuleList(){
+    def serverModuelList = []
+    serverModuelList.add(new ServerModule("zuul","8080","",true,false))
+    serverModuelList.add(new ServerModule("eureka","8761","",true,false))
+    serverModuelList.add(new ServerModule("app-config","12000","22000",false,true))
+    serverModuelList.add(new ServerModule("auth","12010","22010",false,true))
+    serverModuelList.add(new ServerModule("cashback","12020","22020",false,true))
+    serverModuelList.add(new ServerModule("customer","12030","22030",false,true))
+    serverModuelList.add(new ServerModule("favourite","12040","22040",false,true))
+    serverModuelList.add(new ServerModule("id-generator","12050","22050",false,true))
+    serverModuelList.add(new ServerModule("inventory","12060","22060",false,true))
+    serverModuelList.add(new ServerModule("invoice","12070","22070",false,true))
+    serverModuelList.add(new ServerModule("legacy-db","12080","22080",false,true))
+    serverModuelList.add(new ServerModule("message","12090","22090",false,true))
+    serverModuelList.add(new ServerModule("ocb-syncer","12100","22100",false,true))
+    serverModuelList.add(new ServerModule("ocr","12105","22105",false,true))
+    serverModuelList.add(new ServerModule("order","12110","22110",false,true))
+    serverModuelList.add(new ServerModule("payment","12120","22120",false,true))
+    serverModuelList.add(new ServerModule("scheduler","12130","22130",false,true))
+    serverModuelList.add(new ServerModule("shop","12140","22140",false,true))
+    serverModuelList.add(new ServerModule("shopping-bag","12150","22150",false,true))
+    serverModuelList.add(new ServerModule("stripe","12160","22160",false,true))
+    serverModuelList.add(new ServerModule("style-tinder","12165","22165",false,true))
+    return serverModuelList
+}
+
+class ServerModule implements Serializable {
+
+    String serverName
+
+    String port
+
+    String debugPort
+
+    boolean openPortMapping
+
+    boolean hasDebug
+
+    ServerModule(String serverName,String port,String debugPort,boolean openPortMapping,boolean hasDebug){
+        this.serverName = serverName
+        this.port = port
+        this.debugPort = debugPort
+        this.openPortMapping = openPortMapping
+        this.hasDebug = hasDebug
+    }
+
+}
+
+

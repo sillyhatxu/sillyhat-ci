@@ -21,6 +21,7 @@ node {
 
         stage("Build"){
             println "--------Build. begin--------"
+            sh "ls"
             docker.image('java').inside{
                 sh "./gradlew assemble"
             }
@@ -70,24 +71,27 @@ node {
 import groovy.json.JsonOutput
 
 def notifySlack(color,text,tag) {
-    def slackURL = 'https://hooks.slack.com/services/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';
-    def payload = JsonOutput.toJson([
-            color : color,
-            pretext : text,
-            fields : [
-                    [
-                            title : "Project Environment",
-                            value : "${env.ENVIRONMENT} [${env.MODULE_NAME}]",
-                            short : true
-                    ],[
-                            title : "Version",
-                            value : tag,
-                            short : true
-                    ]
-            ]
-    ])
-    sh "curl -X POST --data-urlencode \'payload=${payload}\' ${slackURL}"
+
 }
+//def notifySlack(color,text,tag) {
+//    def slackURL = 'https://hooks.slack.com/services/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';
+//    def payload = JsonOutput.toJson([
+//            color : color,
+//            pretext : text,
+//            fields : [
+//                    [
+//                            title : "Project Environment",
+//                            value : "${env.ENVIRONMENT} [${env.MODULE_NAME}]",
+//                            short : true
+//                    ],[
+//                            title : "Version",
+//                            value : tag,
+//                            short : true
+//                    ]
+//            ]
+//    ])
+//    sh "curl -X POST --data-urlencode \'payload=${payload}\' ${slackURL}"
+//}
 
 def executeBuild() {
     if("${env.OPERATION}" == "remove"){

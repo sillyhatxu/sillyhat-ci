@@ -22,9 +22,10 @@ node {
         stage("Build"){
             println "--------Build. begin--------"
             sh "ls"
-            docker.image('java').inside{
-                sh "./gradlew assemble"
-            }
+            sh "./gradlew assemble"
+//            docker.image('java').inside{
+//                sh "./gradlew assemble"
+//            }
             println "--------Build. end--------"
         }
 

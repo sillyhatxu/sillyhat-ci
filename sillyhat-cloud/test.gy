@@ -1,0 +1,108 @@
+def tag = ''
+def modules = []
+def serverIp = '172.28.2.18'
+def remoteShell = "ssh -o StrictHostKeyChecking=no mozat@${serverIp} "
+def login = ''
+def operation = 'test'
+def profile = 'dt'
+
+pipeline{
+    agent any
+
+    stages{
+        stage("Pre-Build"){
+            steps{
+                sh(returnStdout: true, script: 'cat /home/ubuntu/command')
+                script{
+                    tag = getTag("${params.TAG}")
+                    modules = getModules("${MODULES}","${ALL_MODULES}")
+                    tmp = sh(returnStdout: true, script: 'cat /home/ubuntu/command')
+                    login = getLogin(tmp)
+                    operation=getOperation("${params.OPERATION}")
+                }
+                echo "${login}"
+            }
+        }
+
+        stage("Clone"){
+            steps{
+                script{
+                    git branch:'master', credentialsId:'xushikuan', url:'https://github.com/xushikuan/sillyhat-cloud.git'
+                    sh "git checkout master"
+                }
+            }
+        }
+
+        stage("Build"){
+            steps{
+                script{
+                    for(int i=0;i<modules.size();i++){
+                        docker.image('java').inside{
+                            sh "./gradlew assemble"
+                        }
+                    }
+                }
+            }
+        }
+
+
+        stage('Build Docker Image') {
+            steps{
+                sh 'docker-compose -f docker-compose.yml build'
+            }
+        }
+
+        stage('Push Image') {
+            steps{
+                script{
+                    env.AWS_ECR_LOGIN=true
+                    docker.withRegistry("https://111909622691.dkr.ecr.ap-southeast-1.amazonaws.com","ecr:ap-southeast-1:47d00a11-10f6-4bbd-bcb0-65e87430bc78") {
+                        sh 'docker-compose -f docker-compose.yml push'
+                    }
+                }
+            }
+        }
+
+
+        stage("deploy"){
+            steps{
+                sshagent(['dt']) {
+                    sh "${remoteShell} /home/mozat/ci/ci-go -e ${profile} -d ci -l \\'${login}\\' ${operation} ${modules.join(' ')}"
+                }
+            }
+        }
+    }
+}
+
+
+def getTag(String input){
+    if(input == ""){
+        return "master"
+    }else{
+        return input
+    }
+}
+
+def getModules(String selected,String all){
+    if(selected==''){
+        return all.tokenize(',')
+    }else{
+        return selected.tokenize(',')
+    }
+}
+
+def getLogin(String input){
+    return input.trim()
+}
+
+def getOperation(String input){
+    if(input==''){
+        return 'deploy'
+    }else if(input=='deploy'){
+        return 'deploy'
+    }else if(input=='deploy-prune'){
+        return '--prune deploy'
+    }else if(input=='remove'){
+        return 'remove'
+    }
+}

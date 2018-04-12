@@ -12,14 +12,25 @@ node {
             println "--------Pre build. end--------"
         }
 
-        stage('Clone repository') {
-            println "--------Clone repository. begin--------"
-            println "--------Clone repository. end--------"
+        stage("Clone"){
+            steps{
+                script{
+                    git branch:'master', credentialsId:'xushikuan', url:'https://github.com/xushikuan/sillyhat-cloud.git'
+                    sh "git checkout master"
+                }
+            }
         }
 
-        stage('Build'){
-            println "--------Build. begin--------"
-            println "--------Build. end--------"
+        stage("Build"){
+            steps{
+                script{
+                    for(int i=0;i<modules.size();i++){
+                        docker.image('java').inside{
+                            sh "./gradlew assemble"
+                        }
+                    }
+                }
+            }
         }
 
         stage('Test'){
@@ -27,13 +38,25 @@ node {
             println "--------Test. end--------"
         }
 
+
         stage('Build Docker Image') {
             println "--------Build Docker Image. begin--------"
+            steps{
+                sh 'docker-compose -f docker-compose.yml build'
+            }
             println "--------Build Docker Image. end--------"
         }
 
         stage('Push Image') {
             println "--------Push Image. begin--------"
+//            steps{
+//                script{
+//                    env.AWS_ECR_LOGIN=true
+//                    docker.withRegistry("https://111909622691.dkr.ecr.ap-southeast-1.amazonaws.com","ecr:ap-southeast-1:47d00a11-10f6-4bbd-bcb0-65e87430bc78") {
+//                        sh 'docker-compose -f docker-compose.yml push'
+//                    }
+//                }
+//            }
             println "--------Push Image. end--------"
         }
 

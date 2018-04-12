@@ -13,14 +13,18 @@ node {
         }
 
         stage("Clone"){
+            println "--------Clone. begin--------"
             git branch:'master', credentialsId:'xushikuan', url:'https://github.com/xushikuan/sillyhat-cloud.git'
             sh "git checkout master"
+            println "--------Clone. end--------"
         }
 
         stage("Build"){
+            println "--------Build. begin--------"
             docker.image('java').inside{
                 sh "./gradlew assemble"
             }
+            println "--------Build. end--------"
         }
 
         stage('Test'){

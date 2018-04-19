@@ -16,6 +16,7 @@ node {
             println "--------Clone. begin--------"
             git branch:'master', credentialsId:'xushikuan', url:'https://github.com/xushikuan/sillyhat-cloud.git'
             sh "git checkout master"
+            sh "git pull"
             println "--------Clone. end--------"
         }
 

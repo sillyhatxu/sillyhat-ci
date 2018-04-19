@@ -1,1 +1,1 @@
-docker service rm eureka zuul customer web-app
+docker service rm eureka zuul customer

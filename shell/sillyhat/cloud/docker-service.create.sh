@@ -1,51 +1,27 @@
-DOCKERFILENAME=${3:-all}
+echo "zuul start"
+docker service create --name zuul \
+ --replicas 1 \
+ --detach \
+ --network dt \
+ --with-registry-auth \
+ --env SPRING_PROFILES_ACTIVE=dt \
+ -p 8080:8080 \
+ xushikuan/sillyhat.cloud.zuul:latest
 
-if [ $DOCKERFILENAME == "all" ] || [ $DOCKERFILENAME == "zuul" ]
-then
-    echo "zuul start"
-    docker service create --name zuul \
-     --replicas 1 \
-     --detach \
-     --network $1 \
-     --with-registry-auth \
-     --env SPRING_PROFILES_ACTIVE=$1 \
-     -p 8080:8080 \
-     xushikuan/sillyhat.cloud.zuul:$2
-fi
+echo "eureka start"
+docker service create --name eureka \
+ --replicas 1 \
+ --detach \
+ --network dt \
+ --with-registry-auth \
+ --env SPRING_PROFILES_ACTIVE=dt \
+ -p 8761:8761 \
+ xushikuan/sillyhat.cloud.eureka:latest
 
-if [ $DOCKERFILENAME == "all" ] || [ $DOCKERFILENAME == "eureka" ]
-then
-    echo "eureka start"
-    docker service create --name eureka \
-     --replicas 1 \
-     --detach \
-     --network $1 \
-     --with-registry-auth \
-     --env SPRING_PROFILES_ACTIVE=$1 \
-     -p 8761:8761 \
-     xushikuan/sillyhat.cloud.eureka:$2
-fi
-
-if [ $DOCKERFILENAME == "all" ] || [ $DOCKERFILENAME == "customer" ]
-then
-    echo "customer start"
-    docker service create --name customer \
-      --replicas 1 \
-      --detach \
-      --network $1 \
-      --with-registry-auth \
-      --env SPRING_PROFILES_ACTIVE=$1 \
-      xushikuan/sillyhat.cloud.customer:$2
-fi
-
-if [ $DOCKERFILENAME == "all" ] || [ $DOCKERFILENAME == "web-app" ]
-then
-    echo "web-app start"
-    docker service create --name web-app \
-      --replicas 1 \
-      --detach \
-      --network $1 \
-      --with-registry-auth \
-      --env SPRING_PROFILES_ACTIVE=$1 \
-      xushikuan/sillyhat.cloud.web-app:$2
-fi
+docker service create --name customer \
+  --replicas 1 \
+  --detach \
+  --network dt \
+  --with-registry-auth \
+  --env SPRING_PROFILES_ACTIVE=dt \
+  xushikuan/sillyhat.cloud.customer:latest
